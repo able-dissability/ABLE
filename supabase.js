@@ -4,7 +4,9 @@ console.info("ABLE: Supabase "+(sb?"connected":"NOT connected (demo mode). Check
 const W=p=>p.then(x=>{if(x.error)toast(x.error.message)});
 const ALLT=()=>TALENT.concat(S.tal||[]);
 let SUBCH=null;
-async function sbLoad(u){const {data}=await sb.from("profiles").select("*").eq("id",u.id).single();if(!data)return false;S.me={role:data.role,name:data.name,email:u.email,id:u.id};
+async function sbLoad(u){let {data}=await sb.from("profiles").select("*").eq("id",u.id).maybeSingle();
+ if(!data){const m=u.user_metadata||{};if(!m.role)return false;const ins=await sb.from("profiles").insert({id:u.id,role:m.role==="e"?"e":"s",name:m.name||u.email,data:m.info||{}}).select().maybeSingle();if(ins.error){toast(ins.error.message);return false}data=ins.data;if(!data)return false}
+ S.me={role:data.role,name:data.name,email:u.email,id:u.id};
  if(data.role==="s"){S.prof=data.data||{};S.asr=S.prof.asr||null;S.streak=S.prof.streak||{n:0,last:""};S.chk=S.prof.chk||[]}else{S.co=data.data||{};if(S.co.emps)S.emps=S.co.emps}
  S.prefs=data.prefs||{email:true,push:false};if(!S.prefs.lang){S.prefs.lang=S.L;savePrefs()}
  await sbData();sbSub();return true}
@@ -26,8 +28,8 @@ async function sbSignup(d,s){AB=true;try{const info=s?{name:d.name,phone:d.phone
  const {data,error}=await sb.auth.signUp({email:d.email,password:d.password,options:{data:{role:regRole,name:d.name,info},emailRedirectTo:location.origin+location.pathname}});
  if(error)return errs([error.message]);
  if(!data.session){$("#errs").innerHTML=`<div class="ok">${t("confirm_sent")}</div>`;return}
- await sbLoad(data.user);if(!s)await sbSaveProf();S.tab[regRole]="home";sv();go(s?"seeker":"employer");toast(t("done"))}finally{AB=false}}
-async function sbLogin(d){AB=true;try{const {data,error}=await sb.auth.signInWithPassword({email:d.email,password:d.password});if(error||!await sbLoad(data.user))return errs([t("wrong")]);S.tab[S.me.role]="home";sv();go(S.me.role==="s"?"seeker":"employer")}finally{AB=false}}
+ if(!await sbLoad(data.user))return errs([t("noprof")]);if(!s)await sbSaveProf();S.tab[regRole]="home";sv();go(s?"seeker":"employer");toast(t("done"))}finally{AB=false}}
+async function sbLogin(d){AB=true;try{const {data,error}=await sb.auth.signInWithPassword({email:d.email,password:d.password});if(error)return errs([t("wrong")]);if(!await sbLoad(data.user))return errs([t("noprof")]);S.tab[S.me.role]="home";sv();go(S.me.role==="s"?"seeker":"employer")}finally{AB=false}}
 if(sb)sb.auth.onAuthStateChange((ev,session)=>{
  if(ev==="PASSWORD_RECOVERY"){RECOVER=true;setTimeout(()=>{location.hash="reset"},0);return}
  if(ev==="SIGNED_IN"&&session&&!AB&&!RECOVER&&!(S.me&&S.me.id===session.user.id)&&["","home","login","signup"].includes(route()))setTimeout(async()=>{if(await sbLoad(session.user)){S.tab[S.me.role]="home";sv();go(S.me.role==="s"?"seeker":"employer")}},0)});
